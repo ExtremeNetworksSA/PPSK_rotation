@@ -104,8 +104,14 @@ def main() -> None:
     session = requests.Session()
     session.headers["Authorization"] = f"Bearer {token}"
 
-    group = find_group(session, args.group_name)
-    users = paged(session, "/endusers", user_group_ids=group["id"])
+    try:
+        group = find_group(session, args.group_name)
+        users = paged(session, "/endusers", user_group_ids=group["id"])
+    except requests.HTTPError as exc:
+        if exc.response.status_code in (401, 403):
+            sys.exit("XIQ rejected the token (HTTP %d): check XIQ_API_TOKEN."
+                     % exc.response.status_code)
+        raise
     log.info("Rotating %d user(s) in group %r", len(users), args.group_name)
 
     rotated: list[tuple[str, str]] = []

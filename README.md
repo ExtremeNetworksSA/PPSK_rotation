@@ -14,8 +14,8 @@ Time Period = 7 days) as a backstop for missed runs.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests
-export XIQ_API_TOKEN="<key from XIQ: Administration > Integrations>"
+pip install xiq-client
+export XIQ_TOKEN="<key from XIQ: Administration > Integrations>"
 ```
 
 To use Extreme Platform ONE endpoint instead of XIQ, also set:
@@ -46,5 +46,5 @@ output.
 0 6 1 * * cd /path/to/PPSK-rotation && ./.venv/bin/python ppsk_rotate.py --group-name "Corp-PPSK" >> rotate.log 2>&1
 ```
 
-`XIQ_API_TOKEN` (and `XIQ_BASE_URL` if needed) must be in the cron
+`XIQ_TOKEN` (and `XIQ_BASE_URL` if needed) must be in the cron
 environment.

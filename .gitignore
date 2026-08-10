@@ -1,0 +1,5 @@
+.venv/
+.token
+.env
+rotate.log
+*.csv

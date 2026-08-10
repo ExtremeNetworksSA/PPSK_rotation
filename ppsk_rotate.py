@@ -3,10 +3,11 @@
 
 Each user is deleted and recreated with the same data, minus the
 password: XIQ generates a new key per the group's password rules and,
-by default, emails it to the user (the group's Delivery Settings must
-have Email enabled).
+by default, emails/SMSes it to the user (the group's Delivery Settings
+must enable the method, and the user must have a delivery address set).
 
-Auth: set XIQ_API_TOKEN (XIQ: Administration > Integrations).
+Auth: set XIQ_TOKEN (XIQ: Administration > Integrations), or use a
+.env file. Set XIQ_BASE_URL to target Extreme Platform ONE.
 
 Usage:
   python3 ppsk_rotate.py --group-name "Corp-PPSK" [--no-email] [--out keys.csv]
@@ -19,12 +20,16 @@ import logging
 import os
 import sys
 
-import requests
+from xiq_client import (
+    XIQ,
+    XIQ_BASE_URL,
+    AuthenticationError,
+    CredentialsError,
+    XIQError,
+)
 
-BASE_URL = os.environ.get("XIQ_BASE_URL", "https://api.extremecloudiq.com")
-PAGE_SIZE = 100
-
-# Writable fields carried over into the recreated user.
+# Writable fields carried over into the recreated user. password is
+# omitted so XIQ generates a new key; server-set fields are excluded.
 COPY_FIELDS = (
     "user_name",
     "name",
@@ -36,54 +41,20 @@ COPY_FIELDS = (
     "vlan_override",
 )
 
-# Credential delivery destinations, copied unless --no-email is given.
+# Credential delivery destinations (address strings, not booleans),
+# copied unless --no-email is given.
 DELIVERY_FIELDS = ("email_password_delivery", "sms_password_delivery")
 
 log = logging.getLogger("ppsk-rotate")
 
 
-def paged(session: requests.Session, path: str, **params) -> list[dict]:
-    """Collect every item from a paginated XIQ list endpoint."""
-    items: list[dict] = []
-    page = 1
-    while True:
-        resp = session.get(
-            f"{BASE_URL}{path}",
-            params={**params, "page": page, "limit": PAGE_SIZE},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        items.extend(body.get("data", []))
-        if page >= body.get("total_pages", 1):
-            return items
-        page += 1
-
-
-def find_group(session: requests.Session, name: str) -> dict:
-    for group in paged(session, "/usergroups"):
-        if group.get("name") == name:
-            return group
-    sys.exit(f"User group {name!r} not found.")
-
-
-def rotate_user(session: requests.Session, user: dict, deliver_email: bool) -> dict:
-    """Delete the user and recreate it; return the new record (with new key)."""
-    # Truthy filter: also drops vlan_override 0 ("no override"), which
-    # the API rejects on create.
-    payload = {"user_group_id": user["user_group_id"]}
-    payload.update({f: user[f] for f in COPY_FIELDS if user.get(f)})
-    if deliver_email:
-        # These take the destination address itself, not a boolean flag.
-        payload.update(
-            {f: user[f] for f in DELIVERY_FIELDS if user.get(f)}
-        )
-
-    resp = session.delete(f"{BASE_URL}/endusers/{user['id']}", timeout=30)
-    resp.raise_for_status()
-    resp = session.post(f"{BASE_URL}/endusers", json=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+def recreate_payload(user: dict, deliver: bool) -> dict:
+    fields = COPY_FIELDS + DELIVERY_FIELDS if deliver else COPY_FIELDS
+    # Truthy filter: drops empty strings and vlan_override 0
+    # ("no override"), which the API rejects on create.
+    payload = {f: user[f] for f in fields if user.get(f)}
+    payload["user_group_id"] = user["user_group_id"]
+    return payload
 
 
 def main() -> None:
@@ -100,18 +71,16 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
 
-    token = os.environ.get("XIQ_API_TOKEN") or sys.exit("Set XIQ_API_TOKEN.")
-    session = requests.Session()
-    session.headers["Authorization"] = f"Bearer {token}"
-
     try:
-        group = find_group(session, args.group_name)
-        users = paged(session, "/endusers", user_group_ids=group["id"])
-    except requests.HTTPError as exc:
-        if exc.response.status_code in (401, 403):
-            sys.exit("XIQ rejected the token (HTTP %d): check XIQ_API_TOKEN."
-                     % exc.response.status_code)
-        raise
+        xiq = XIQ(base_url=os.environ.get("XIQ_BASE_URL", XIQ_BASE_URL))
+        group = next(
+            (g for g in xiq.usergroups() if g.get("name") == args.group_name),
+            None,
+        ) or sys.exit(f"User group {args.group_name!r} not found.")
+        users = list(xiq.endusers(user_group_ids=group["id"]))
+    except (CredentialsError, AuthenticationError) as exc:
+        sys.exit(str(exc))
+
     log.info("Rotating %d user(s) in group %r", len(users), args.group_name)
 
     rotated: list[tuple[str, str]] = []
@@ -119,10 +88,13 @@ def main() -> None:
     for user in users:
         label = user.get("user_name") or str(user["id"])
         try:
-            new_user = rotate_user(session, user, not args.no_email)
-        except requests.HTTPError as exc:
+            xiq.delete_enduser(user["id"])
+            new_user = xiq.create_enduser(
+                recreate_payload(user, not args.no_email)
+            )
+        except XIQError as exc:
             failures += 1
-            log.error("%s: %s (%s)", label, exc, exc.response.text)
+            log.error("%s: %s", label, exc)
             # The delete may have succeeded before the recreate failed;
             # keep the original record so the user can be restored.
             log.error("%s original record: %s", label, json.dumps(user))

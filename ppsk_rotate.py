@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import requests
 
@@ -113,6 +114,15 @@ def main() -> None:
                      % exc.response.status_code)
         raise
     log.info("Rotating %d user(s) in group %r", len(users), args.group_name)
+
+    if users:
+        # Pre-rotation backup: everything needed to restore any user
+        # whose recreate fails after the delete. Contains live keys.
+        backup = time.strftime("users-%Y%m%d-%H%M%S.json")
+        with open(backup, "w") as fh:
+            json.dump(users, fh, indent=1)
+        os.chmod(backup, 0o600)
+        log.info("Backed up %d user record(s) to %s", len(users), backup)
 
     rotated: list[tuple[str, str]] = []
     failures = 0

@@ -3,3 +3,4 @@
 .env
 rotate.log
 *.csv
+users-*.json

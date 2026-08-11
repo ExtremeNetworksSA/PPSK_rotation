@@ -33,6 +33,12 @@ python3 ppsk_rotate.py --group-name "Corp-PPSK"
 - `--no-email` — skip email/SMS delivery of new keys
 - `--out keys.csv` — also write `user_name,new_password` pairs
 
+Each run first writes a pre-rotation backup (`users-<timestamp>.json`,
+chmod 600) of every fetched user record; if a recreate fails after its
+delete, restore the user by POSTing their record from the backup
+(drop the server-set fields). The backups contain live keys — prune
+old ones periodically.
+
 Exits non-zero if any user failed to rotate; details are in the log
 output.
 

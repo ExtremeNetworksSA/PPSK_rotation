@@ -15,12 +15,23 @@ Time Period = 7 days) as a backstop for missed runs.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install xiq-client
+```
+
+Generate an API token on the platform you are targeting — XIQ and
+Extreme Platform ONE tokens are created separately and are NOT
+interchangeable.
+
+For ExtremeCloud IQ (default endpoint):
+
+```bash
 export XIQ_TOKEN="<key from XIQ: Administration > Integrations>"
 ```
 
-To use Extreme Platform ONE endpoint instead of XIQ, also set:
+For Extreme Platform ONE (`extr_sk_...` keys, from Platform ONE:
+Administration & Settings > Integrations):
 
 ```bash
+export XIQ_TOKEN="<Platform ONE API key>"
 export XIQ_BASE_URL="https://cloudapi.extremecloudiq.com/xiq/v1"
 ```
 

@@ -6,8 +6,10 @@ password: XIQ generates a new key per the group's password rules and,
 by default, emails/SMSes it to the user (the group's Delivery Settings
 must enable the method, and the user must have a delivery address set).
 
-Auth: set XIQ_TOKEN (XIQ: Administration > Integrations), or use a
-.env file. Set XIQ_BASE_URL to target Extreme Platform ONE.
+Auth: set XIQ_TOKEN (or use a .env file) to a token for the endpoint
+in use — XIQ (Administration > Integrations) or Extreme Platform ONE
+(Administration & Settings > Integrations, with XIQ_BASE_URL set).
+The two platforms' tokens are not interchangeable.
 
 Usage:
   python3 ppsk_rotate.py --group-name "Corp-PPSK" [--no-email] [--out keys.csv]

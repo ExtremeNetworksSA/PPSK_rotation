@@ -96,6 +96,8 @@ def main() -> None:
                         help="skip email/SMS delivery of new keys")
     parser.add_argument("--out", metavar="CSV",
                         help="also write user_name,new_password pairs here")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="skip the pre-rotation backup file")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -115,7 +117,7 @@ def main() -> None:
         raise
     log.info("Rotating %d user(s) in group %r", len(users), args.group_name)
 
-    if users:
+    if users and not args.no_backup:
         # Pre-rotation backup: everything needed to restore any user
         # whose recreate fails after the delete. Contains live keys.
         backup = time.strftime("users-%Y%m%d-%H%M%S.json")
